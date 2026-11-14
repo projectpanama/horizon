@@ -5,3 +5,6 @@ members = ["apps/*", "crates/*", "tools/*"]
 name = "horizon"
 version = "0.1.0"
 edition = "2024"
+
+[dependencies]
+horizon-design = { path = "./crates/horizon-design" }
