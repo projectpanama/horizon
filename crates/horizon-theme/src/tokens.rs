@@ -1,15 +1,18 @@
 use std::path::{Path, PathBuf};
 
-use crate::{ColorScheme, colors::Colors, palette::Palette};
+use crate::{ColorScheme, Colors, Typography, palette::Palette};
 
 const BUILTIN: &str = include_str!("../assets/tokens.toml");
 const TOKEN_RELATIVE_PATH: &str = "horizon/tokens.toml";
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Tokens {
     /// Colors used by the light color scheme.
     pub light: Colors,
     /// Colors used by the dark color scheme.
     pub dark: Colors,
+    /// Typography shared by both color schemes.
+    pub typography: Typography,
 }
 
 impl Tokens {
@@ -108,6 +111,8 @@ impl Tokens {
         Ok(Self {
             light: Colors::from_tokens(table(&["color", "light"])?, &palette).map_err(Error)?,
             dark: Colors::from_tokens(table(&["color", "dark"])?, &palette).map_err(Error)?,
+            typography: Typography::from_tokens(table(&["typography"])?)
+                .map_err(|e| Error(format!("typography: {e}")))?,
         })
     }
 }
