@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+accesskit = "0.25.2"
+horizon-design = { path = "../../crates/horizon-design" }
+horizon-theme = { path = "../../crates/horizon-theme" }
+taffy = "0.15.1"
+vello = "0.12.0"
