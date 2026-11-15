@@ -391,3 +391,164 @@ fn profile_gpu_rendering_and_readback() {
         samples[samples.len() / 2]
     );
 }
+
+/// Produces an inspectable specimen using the same controlled fonts as text tests.
+#[test]
+#[ignore = "visual typography check; requires a Vulkan adapter"]
+fn typography_specimen() {
+    use crate::{DrawOptions, TextStyle, render::text::tests::fixture_system};
+    use horizon_theme::TextRole;
+    use std::io::Write;
+    use vello::kurbo::Point;
+
+    let (mut text, typography) = fixture_system();
+    let mut scene = Scene::new();
+    let output_scale = 1.25;
+    let mut y = 24.0;
+    for role in TextRole::ALL {
+        text.draw(
+            &typography,
+            &mut scene,
+            role.name(),
+            &TextStyle::default(),
+            None,
+            DrawOptions {
+                origin: Point::new(24.0, y),
+                output_scale,
+                color: Color::from_rgb8(95, 95, 95),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let sample = if role == TextRole::Display {
+            "Horizon 09:41"
+        } else {
+            "Horizon — Aa Bb 0123456789"
+        };
+        let style = TextStyle::new(role);
+        let measured = text
+            .measure(&typography, sample, &style, None, output_scale)
+            .unwrap();
+        let drawn = text
+            .draw(
+                &typography,
+                &mut scene,
+                sample,
+                &style,
+                None,
+                DrawOptions {
+                    origin: Point::new(150.0, y),
+                    output_scale,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(drawn, measured);
+        y += measured.height + 16.0;
+    }
+    for (label, sample, style, width) in [
+        (
+            "tabular digits",
+            "09:41  11:11  88:88",
+            TextStyle::default().feature("tnum", 1),
+            None,
+        ),
+        (
+            "wrapped",
+            "Typography follows the theme. Measurement and drawing share a layout, including explicit newlines.\nA second paragraph.",
+            TextStyle::default(),
+            Some(350.0),
+        ),
+        (
+            "fallback",
+            "Horizon Καλημέρα Привет א",
+            TextStyle::default().font(horizon_theme::FontDefinition::new([
+                "Inter",
+                "Inter Variable",
+                "Liberation Mono",
+            ])),
+            None,
+        ),
+        (
+            "overrides",
+            "Italic • weight 550 • tracking",
+            TextStyle::default()
+                .slant(horizon_theme::FontSlant::Italic)
+                .weight(550.0)
+                .tracking(0.04),
+            None,
+        ),
+    ] {
+        text.draw(
+            &typography,
+            &mut scene,
+            label,
+            &TextStyle::default(),
+            None,
+            DrawOptions {
+                origin: Point::new(24.0, y),
+                output_scale,
+                color: Color::from_rgb8(95, 95, 95),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let metrics = text
+            .draw(
+                &typography,
+                &mut scene,
+                sample,
+                &style,
+                width,
+                DrawOptions {
+                    origin: Point::new(150.0, y),
+                    output_scale,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        y += metrics.height + 16.0;
+    }
+    for scale in [1.0, 1.25, 2.0] {
+        text.set_text_scale(scale).unwrap();
+        let metrics = text
+            .draw(
+                &typography,
+                &mut scene,
+                &format!("Text scale {scale}×"),
+                &TextStyle::default(),
+                None,
+                DrawOptions {
+                    origin: Point::new(150.0, y),
+                    output_scale,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        y += metrics.height + 16.0;
+    }
+    let width = 1200;
+    let height = ((y + 24.0) * output_scale).ceil() as u32;
+    let instance = wgpu_instance();
+    let mut gpu = Gpu::new(&instance, None).expect("a Vulkan adapter is required for this test");
+    let validation = gpu.device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let pixels = gpu
+        .read_pixels(&scene, width, height, Color::WHITE)
+        .unwrap();
+    assert!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[0] < 100 && p[1] < 100 && p[2] < 100)
+    );
+    assert!(pollster::block_on(validation.pop()).is_none());
+    let path = std::env::temp_dir().join("horizon-typography.ppm");
+    let mut file = std::io::BufWriter::new(std::fs::File::create(&path).unwrap());
+    write!(file, "P6\n{width} {height}\n255\n").unwrap();
+    for pixel in pixels.as_chunks::<4>().0 {
+        file.write_all(&pixel[..3]).unwrap();
+    }
+    file.flush().unwrap();
+    eprintln!("typography specimen: {}", path.display());
+}
